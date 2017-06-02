@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"math/big"
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from
@@ -58,5 +59,6 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		GasPrice: new(big.Int), // TODO(joel): necessary?
 	}
 }

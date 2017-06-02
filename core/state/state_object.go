@@ -374,3 +374,7 @@ func (self *stateObject) Nonce() uint64 {
 func (self *stateObject) Value() *big.Int {
 	panic("Value on stateObject should never be called")
 }
+
+func (self *stateObject) storageRoot(db trie.Database) common.Hash {
+	return self.getTrie(db).Hash()
+}

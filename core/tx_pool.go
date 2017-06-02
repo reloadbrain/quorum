@@ -70,7 +70,7 @@ var (
 	underpricedTxCounter = metrics.NewCounter("txpool/underpriced")
 )
 
-type stateFn func() (*state.StateDB, error)
+type stateFn func() (*state.StateDB, *state.StateDB, error)
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
@@ -231,7 +231,7 @@ func (pool *TxPool) eventLoop() {
 }
 
 func (pool *TxPool) resetState() {
-	currentState, err := pool.currentState()
+	currentState, _, err := pool.currentState()
 	if err != nil {
 		log.Error("Failed reset txpool state", "err", err)
 		return
@@ -359,11 +359,11 @@ func (pool *TxPool) SetLocal(tx *types.Transaction) {
 func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	local := pool.locals.contains(tx.Hash())
 	// Drop transactions under our own minimal accepted gas price
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 && !params.IsQuorum {
 		return ErrUnderpriced
 	}
 
-	currentState, err := pool.currentState()
+	currentState, _, err := pool.currentState()
 	if err != nil {
 		return err
 	}
@@ -380,7 +380,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Check the transaction doesn't exceed the current
 	// block limit gas.
 	if pool.gasLimit().Cmp(tx.Gas()) < 0 {
-		return ErrGasLimit
+		if !params.IsQuorum {
+			return ErrGasLimit
+		}
 	}
 
 	// Transactions can't be negative. This may never happen
@@ -393,7 +395,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		if !types.IsQuorum {
+		if !params.IsQuorum {
 			return ErrInsufficientFunds
 		}
 	}
@@ -426,7 +428,7 @@ func (pool *TxPool) add(tx *types.Transaction) (bool, error) {
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
-		if pool.priced.Underpriced(tx, pool.locals) {
+		if pool.priced.Underpriced(tx, pool.locals) && !params.IsQuorum {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
 			underpricedTxCounter.Inc(1)
 			return false, ErrUnderpriced
@@ -544,7 +546,7 @@ func (pool *TxPool) Add(tx *types.Transaction) error {
 	}
 	// If we added a new transaction, run promotion checks and return
 	if !replace {
-		state, err := pool.currentState()
+		state, _, err := pool.currentState()
 		if err != nil {
 			return err
 		}
@@ -571,7 +573,7 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 	}
 	// Only reprocess the internal state if something was actually added
 	if len(dirty) > 0 {
-		state, err := pool.currentState()
+		state, _, err := pool.currentState()
 		if err != nil {
 			return err
 		}
@@ -680,14 +682,15 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 			delete(pool.all, hash)
 			pool.priced.Removed()
 		}
-		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(state.GetBalance(addr), gaslimit)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			log.Trace("Removed unpayable queued transaction", "hash", hash)
-			delete(pool.all, hash)
-			pool.priced.Removed()
-			queuedNofundsCounter.Inc(1)
+		if !params.IsQuorum {
+			// Drop all transactions that are too costly (low balance or out of gas)
+			drops, _ := list.Filter(state.GetBalance(addr), gaslimit)
+			for _, tx := range drops {
+				hash := tx.Hash()
+				delete(pool.all, hash)
+				pool.priced.Removed()
+				queuedNofundsCounter.Inc(1)
+			}
 		}
 		// Gather all executable transactions and promote them
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
@@ -820,18 +823,20 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(state.GetBalance(addr), gaslimit)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			log.Trace("Removed unpayable pending transaction", "hash", hash)
-			delete(pool.all, hash)
-			pool.priced.Removed()
-			pendingNofundsCounter.Inc(1)
+		if !params.IsQuorum {
+			for _, tx := range drops {
+				hash := tx.Hash()
+				delete(pool.all, hash)
+				pool.priced.Removed()
+				pendingNofundsCounter.Inc(1)
+			}
+			for _, tx := range invalids {
+				hash := tx.Hash()
+				log.Trace("Demoting pending transaction", "hash", hash)
+				pool.enqueueTx(hash, tx)
+			}
 		}
-		for _, tx := range invalids {
-			hash := tx.Hash()
-			log.Trace("Demoting pending transaction", "hash", hash)
-			pool.enqueueTx(hash, tx)
-		}
+
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
 			delete(pool.pending, addr)

@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrInvalidChainId = errors.New("invalid chaid id for signer")
+	ErrInvalidChainId = errors.New("invalid chain id for signer")
 
 	errAbstractSigner     = errors.New("abstract signer")
 	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffffff")
@@ -43,6 +43,9 @@ type sigCache struct {
 
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
+	if params.IsQuorum {
+		return HomesteadSigner{}
+	}
 	var signer Signer
 	switch {
 	case config.IsEIP155(blockNumber):

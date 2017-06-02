@@ -39,13 +39,17 @@ var (
 	headBlockKey  = []byte("LastBlock")
 	headFastKey   = []byte("LastFast")
 
-	headerPrefix        = []byte("h")   // headerPrefix + num (uint64 big endian) + hash -> header
-	tdSuffix            = []byte("t")   // headerPrefix + num (uint64 big endian) + hash + tdSuffix -> td
-	numSuffix           = []byte("n")   // headerPrefix + num (uint64 big endian) + numSuffix -> hash
-	blockHashPrefix     = []byte("H")   // blockHashPrefix + hash -> num (uint64 big endian)
-	bodyPrefix          = []byte("b")   // bodyPrefix + num (uint64 big endian) + hash -> block body
-	blockReceiptsPrefix = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
-	preimagePrefix      = "secure-key-" // preimagePrefix + hash -> preimage
+	headerPrefix               = []byte("h")   // headerPrefix + num (uint64 big endian) + hash -> header
+	tdSuffix                   = []byte("t")   // headerPrefix + num (uint64 big endian) + hash + tdSuffix -> td
+	numSuffix                  = []byte("n")   // headerPrefix + num (uint64 big endian) + numSuffix -> hash
+	blockHashPrefix            = []byte("H")   // blockHashPrefix + hash -> num (uint64 big endian)
+	bodyPrefix                 = []byte("b")   // bodyPrefix + num (uint64 big endian) + hash -> block body
+	blockReceiptsPrefix        = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	preimagePrefix             = "secure-key-" // preimagePrefix + hash -> preimage
+	privateRootPrefix          = []byte("P")
+	privateblockReceiptsPrefix = []byte("Pr") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	privateReceiptPrefix       = []byte("Prs")
+	privateBloomPrefix         = []byte("Pb")
 
 	txMetaSuffix   = []byte{0x01}
 	receiptsPrefix = []byte("receipts-")
@@ -674,4 +678,29 @@ func FindCommonAncestor(db ethdb.Database, a, b *types.Header) *types.Header {
 		}
 	}
 	return a
+}
+
+func GetPrivateStateRoot(db ethdb.Database, blockRoot common.Hash) common.Hash {
+	root, _ := db.Get(append(privateRootPrefix, blockRoot[:]...))
+	return common.BytesToHash(root)
+}
+
+func WritePrivateStateRoot(db ethdb.Database, blockRoot, root common.Hash) error {
+	return db.Put(append(privateRootPrefix, blockRoot[:]...), root[:])
+}
+
+// WritePrivateBlockBloom creates a bloom filter for the given receipts and saves it to the database
+// with the number given as identifier (i.e. block number).
+func WritePrivateBlockBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
+	rbloom := types.CreateBloom(receipts)
+	return db.Put(append(privateBloomPrefix, encodeBlockNumber(number)...), rbloom[:])
+}
+
+// GetPrivateBlockBloom retrieves the private bloom associated with the given number.
+func GetPrivateBlockBloom(db ethdb.Database, number uint64) (bloom types.Bloom) {
+	data, _ := db.Get(append(privateBloomPrefix, encodeBlockNumber(number)...))
+	if len(data) > 0 {
+		bloom = types.BytesToBloom(data)
+	}
+	return bloom
 }

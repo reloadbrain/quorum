@@ -135,7 +135,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, vm.Config{})
+		receipts, _, _, usedGas, err := blockchain.Processor().Process(block, statedb, statedb, vm.Config{})
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
 			return err
@@ -497,6 +497,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 	}
 }
 
+// TODO(joel): remove?
 // Tests chain insertions in the face of one entity containing an invalid nonce.
 func TestHeadersInsertNonceError(t *testing.T) { testInsertNonceError(t, false) }
 func TestBlocksInsertNonceError(t *testing.T)  { testInsertNonceError(t, true) }
@@ -1131,7 +1132,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 	if _, err := blockchain.InsertChain(types.Blocks{blocks[0]}); err != nil {
 		t.Fatal(err)
 	}
-	if !blockchain.stateCache.Exist(theAddr) {
+	if !blockchain.publicStateCache.Exist(theAddr) {
 		t.Error("expected account to exist")
 	}
 
@@ -1139,7 +1140,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 	if _, err := blockchain.InsertChain(types.Blocks{blocks[1]}); err != nil {
 		t.Fatal(err)
 	}
-	if blockchain.stateCache.Exist(theAddr) {
+	if blockchain.publicStateCache.Exist(theAddr) {
 		t.Error("account should not exist")
 	}
 
@@ -1147,7 +1148,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 	if _, err := blockchain.InsertChain(types.Blocks{blocks[2]}); err != nil {
 		t.Fatal(err)
 	}
-	if blockchain.stateCache.Exist(theAddr) {
+	if blockchain.publicStateCache.Exist(theAddr) {
 		t.Error("account should not exist")
 	}
 }

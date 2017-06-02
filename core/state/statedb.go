@@ -695,3 +695,12 @@ func (s *StateDB) CommitTo(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (ro
 	}
 	return root, err
 }
+
+// GetStorageRoot returns the root of the storage associated with the given address.
+func (self *StateDB) GetStorageRoot(addr common.Address) (common.Hash, error) {
+	so := self.getStateObject(addr)
+	if so == nil {
+		return common.Hash{}, fmt.Errorf("can't find state object")
+	}
+	return so.storageRoot(self.db), nil
+}

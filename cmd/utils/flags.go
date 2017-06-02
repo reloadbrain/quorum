@@ -483,6 +483,12 @@ var (
 		Name:  "emitcheckpoints",
 		Usage: "If enabled, emit specially formatted logging checkpoints",
 	}
+
+	// Quorum
+	EnableNodePermissionFlag = cli.BoolFlag{
+		Name:  "permissioned",
+		Usage: "If enabled, the node will allow only a defined list of nodes to connect",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -809,6 +815,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
+
+	cfg.EnableNodePermission = ctx.GlobalBool(EnableNodePermissionFlag.Name)
 
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
