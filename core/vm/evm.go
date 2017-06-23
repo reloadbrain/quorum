@@ -206,7 +206,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	evm.Push(getDualState(evm, addr))
 	defer func() { evm.Pop() }()
 
-	// XXX(joel) add stuff from old exec() / current Call()
+	// TODO(joel) do we need to do the createAccount / createAccountAndIncrementNonce dance from the old exec()?
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -279,8 +279,6 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 		return nil, common.Address{}, gas, nil
 	}
 
-	// XXX(joel) add stuff from old exec() / current Call()
-
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -290,12 +288,9 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 
-	// Create a new account on the state
-	nonce := evm.StateDB.GetNonce(caller.Address())
-	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+	contractAddr = createAddressAndIncrementNonce(evm, caller)
 
 	snapshot := evm.StateDB.Snapshot()
-	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
 	evm.StateDB.CreateAccount(contractAddr)
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
@@ -421,10 +416,8 @@ func (env *EVM) Push(statedb StateDB) {
 		env.readOnlyDepth = env.currentStateDepth
 	}
 
-	// TODO(joel) this seems like a very clumsy way to cast
-	statedb_, ok := statedb.(*state.StateDB)
-	if ok {
-		env.states[env.currentStateDepth] = statedb_
+	if castedStateDb, ok := statedb.(*state.StateDB); ok {
+		env.states[env.currentStateDepth] = castedStateDb
 		env.currentStateDepth++
 	}
 }
@@ -440,8 +433,6 @@ func (env *EVM) Db() StateDB {
 }
 func (env *EVM) Depth() int     { return env.depth }
 func (env *EVM) SetDepth(i int) { env.depth = i }
-
-// TODO(joel): audit whether all of these are used
 
 func (self *EVM) AddLog(log *types.Log) {
 	self.currentState().AddLog(log)

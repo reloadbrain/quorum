@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -181,25 +180,3 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	}
 	return gl
 }
-
-// TODO(joel): Duplicated in internal/ethapi/api.go
-// TODO(joel): I believe this is just used for testing?
-// callmsg is the message type used for call transactions.
-type callmsg struct {
-	addr          common.Address
-	to            *common.Address
-	gas, gasPrice *big.Int
-	value         *big.Int
-	data          []byte
-}
-
-// accessor boilerplate to implement core.Message
-func (m callmsg) From() common.Address         { return m.addr }
-func (m callmsg) FromFrontier() common.Address { return m.addr }
-func (m callmsg) Nonce() uint64                { return 0 }
-func (m callmsg) To() *common.Address          { return m.to }
-func (m callmsg) GasPrice() *big.Int           { return m.gasPrice }
-func (m callmsg) Gas() *big.Int                { return m.gas }
-func (m callmsg) Value() *big.Int              { return m.value }
-func (m callmsg) Data() []byte                 { return m.data }
-func (m callmsg) CheckNonce() bool             { return true }
