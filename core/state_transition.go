@@ -126,7 +126,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		state:      evm.StateDB,
 	}
 
-	st.state = evm.PublicState()
+	// XXX(joel)
+	//st.state = evm.PublicState()
 	return st
 }
 
@@ -231,24 +232,26 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	var data []byte
 	isPrivate := false
 	publicState := st.state
-	log.Info("transitioning", "msg", msg)
+	println("transitioning", "msg", msg)
 	if msg, ok := msg.(PrivateMessage); ok && msg.IsPrivate() {
-		log.Info("transitioning", "isprivate", true)
+		println("transitioning", "isprivate", true)
 		isPrivate = true
 		data, err = private.P.Receive(st.data)
+		println("transitioning", "data", data, "err", err)
 		// Increment the public account nonce if:
 		// 1. Tx is private and *not* a participant of the group and either call or create
 		// 2. Tx is private we are part of the group and is a call
 		if err != nil || !contractCreation {
+			println("transitioning -- setting nonce")
 			publicState.SetNonce(sender.Address(), publicState.GetNonce(sender.Address())+1)
 		}
 
 		if err != nil {
-			log.Info("Ignoring private tx")
+			println("Ignoring private tx")
 			return nil, new(big.Int), new(big.Int), nil
 		}
 	} else {
-		log.Info("transitioning", "isprivate", false)
+		println("transitioning", "isprivate", false)
 		data = st.data
 	}
 

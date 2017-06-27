@@ -45,6 +45,7 @@ var (
 	ErrIntrinsicGas       = errors.New("intrinsic gas too low")
 	ErrGasLimit           = errors.New("exceeds block gas limit")
 	ErrNegativeValue      = errors.New("negative value")
+	ErrInvalidGasPrice    = errors.New("Gas price not 0")
 )
 
 var (

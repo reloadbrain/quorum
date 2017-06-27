@@ -113,11 +113,12 @@ type EVM struct {
 // and should only ever be used *once*.
 func NewEVM(ctx Context, statedb, privateState StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
 	evm := &EVM{
-		Context:      ctx,
-		StateDB:      statedb,
-		vmConfig:     vmConfig,
-		chainConfig:  chainConfig,
-		chainRules:   chainConfig.Rules(ctx.BlockNumber),
+		Context:     ctx,
+		StateDB:     statedb,
+		vmConfig:    vmConfig,
+		chainConfig: chainConfig,
+		chainRules:  chainConfig.Rules(ctx.BlockNumber),
+
 		privateState: privateState,
 	}
 
@@ -141,6 +142,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, nil
 	}
 
+	println("in EVM.Call")
 	evm.Push(getDualState(evm, addr))
 	defer func() { evm.Pop() }()
 
@@ -155,6 +157,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	var createAccount bool
 	if addr == (common.Address{}) {
+		println("in EVM.Call: createAddressAndIncrementNonce")
 		addr = createAddressAndIncrementNonce(evm, caller)
 		createAccount = true
 	}
@@ -343,10 +346,8 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 // Interpreter returns the EVM interpreter
 func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
 
+// TODO(joel): just switch to EVM?
 type DualStateEnv interface {
-	// This interface looks like StateDB
-	// vm.Environment
-
 	PublicState() StateDB
 	PrivateState() StateDB
 
@@ -374,9 +375,13 @@ func getDualState(env DualStateEnv, addr common.Address) StateDB {
 	// pub:   a  -> [b]  (private -> public)
 	// priv: (a) ->  b   (public)
 	var state StateDB
+	println("public state:", addr.String(), env.PublicState(), env.PublicState().GetCode(addr))
+	println("private state:", addr.String(), env.PrivateState(), env.PrivateState().GetCode(addr))
 	if env.PrivateState().Exist(addr) {
+		println("getDualState: private")
 		state = env.PrivateState()
 	} else if env.PublicState().Exist(addr) {
+		println("getDualState: public")
 		state = env.PublicState()
 	}
 
@@ -428,11 +433,9 @@ func (env *EVM) Pop() {
 	}
 }
 func (env *EVM) currentState() *state.StateDB { return env.states[env.currentStateDepth-1] }
-func (env *EVM) Db() StateDB {
-	return env.currentState()
-}
-func (env *EVM) Depth() int     { return env.depth }
-func (env *EVM) SetDepth(i int) { env.depth = i }
+func (env *EVM) Db() StateDB                  { return env.currentState() }
+func (env *EVM) Depth() int                   { return env.depth }
+func (env *EVM) SetDepth(i int)               { env.depth = i }
 
 func (self *EVM) AddLog(log *types.Log) {
 	self.currentState().AddLog(log)

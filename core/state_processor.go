@@ -100,6 +100,10 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 		privateState = publicState
 	}
 
+	if tx.GasPrice() != nil && tx.GasPrice().Cmp(common.Big0) > 0 {
+		return nil, nil, nil, ErrInvalidGasPrice
+	}
+
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
 		return nil, nil, nil, err
@@ -133,6 +137,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	var privateReceipt *types.Receipt
+	println("ApplyTransaction", "tx.IsPrivate()", tx.IsPrivate())
 	if tx.IsPrivate() {
 		privateReceipt = types.NewReceipt(privateState.IntermediateRoot(true).Bytes(), usedGas)
 		privateReceipt.TxHash = tx.Hash()
