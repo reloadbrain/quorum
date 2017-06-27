@@ -102,6 +102,7 @@ type EVM struct {
 	abort int32
 
 	// Quorum additions:
+	publicState       StateDB
 	privateState      StateDB
 	states            [1027]*state.StateDB
 	currentStateDepth uint
@@ -119,6 +120,7 @@ func NewEVM(ctx Context, statedb, privateState StateDB, chainConfig *params.Chai
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(ctx.BlockNumber),
 
+		publicState:  statedb,
 		privateState: privateState,
 	}
 
@@ -142,7 +144,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, nil
 	}
 
-	println("in EVM.Call")
 	evm.Push(getDualState(evm, addr))
 	defer func() { evm.Pop() }()
 
@@ -157,7 +158,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	var createAccount bool
 	if addr == (common.Address{}) {
-		println("in EVM.Call: createAddressAndIncrementNonce")
 		addr = createAddressAndIncrementNonce(evm, caller)
 		createAccount = true
 	}
@@ -350,6 +350,7 @@ func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
 type DualStateEnv interface {
 	PublicState() StateDB
 	PrivateState() StateDB
+	Db() StateDB
 
 	Push(StateDB)
 	Pop()
@@ -374,14 +375,10 @@ func getDualState(env DualStateEnv, addr common.Address) StateDB {
 	// priv: (a) -> (b)  (private)
 	// pub:   a  -> [b]  (private -> public)
 	// priv: (a) ->  b   (public)
-	var state StateDB
-	println("public state:", addr.String(), env.PublicState(), env.PublicState().GetCode(addr))
-	println("private state:", addr.String(), env.PrivateState(), env.PrivateState().GetCode(addr))
+	state := env.Db()
 	if env.PrivateState().Exist(addr) {
-		println("getDualState: private")
 		state = env.PrivateState()
 	} else if env.PublicState().Exist(addr) {
-		println("getDualState: public")
 		state = env.PublicState()
 	}
 
@@ -399,12 +396,12 @@ func getDualState(env DualStateEnv, addr common.Address) StateDB {
 // If the transaction went to a public contract the private and public state
 // are the same.
 func createAddressAndIncrementNonce(env *EVM, caller ContractRef) common.Address {
-	db := env.Db()
+	var db StateDB
 	// check for a dual state in case of quorum.
 	if env.Depth() > 0 {
-		db = env.PrivateState()
+		db = env.privateState
 	} else {
-		db = env.PublicState()
+		db = env.publicState
 	}
 	// Increment the callers nonce on the state based on the current depth
 	nonce := db.GetNonce(caller.Address())
@@ -413,7 +410,7 @@ func createAddressAndIncrementNonce(env *EVM, caller ContractRef) common.Address
 	return crypto.CreateAddress(caller.Address(), nonce)
 }
 
-func (env *EVM) PublicState() StateDB  { return env.StateDB }
+func (env *EVM) PublicState() StateDB  { return env.publicState }
 func (env *EVM) PrivateState() StateDB { return env.privateState }
 func (env *EVM) Push(statedb StateDB) {
 	if env.privateState != statedb {
@@ -425,23 +422,27 @@ func (env *EVM) Push(statedb StateDB) {
 		env.states[env.currentStateDepth] = castedStateDb
 		env.currentStateDepth++
 	}
+
+	env.StateDB = statedb
 }
 func (env *EVM) Pop() {
 	env.currentStateDepth--
 	if env.readOnly && env.currentStateDepth == env.readOnlyDepth {
 		env.readOnly = false
 	}
+	env.StateDB = env.states[env.currentStateDepth-1]
 }
-func (env *EVM) currentState() *state.StateDB { return env.states[env.currentStateDepth-1] }
-func (env *EVM) Db() StateDB                  { return env.currentState() }
-func (env *EVM) Depth() int                   { return env.depth }
-func (env *EVM) SetDepth(i int)               { env.depth = i }
+
+//func (env *EVM) currentState() *state.StateDB { return env.StateDB }
+func (env *EVM) Db() StateDB    { return env.StateDB }
+func (env *EVM) Depth() int     { return env.depth }
+func (env *EVM) SetDepth(i int) { env.depth = i }
 
 func (self *EVM) AddLog(log *types.Log) {
-	self.currentState().AddLog(log)
+	self.StateDB.AddLog(log)
 }
 func (self *EVM) CanTransfer(from common.Address, balance *big.Int) bool {
-	return self.currentState().GetBalance(from).Cmp(balance) >= 0
+	return self.StateDB.GetBalance(from).Cmp(balance) >= 0
 }
 
 //func (self *EVM) SnapshotDatabase() int {
@@ -453,5 +454,5 @@ func (self *EVM) CanTransfer(from common.Address, balance *big.Int) bool {
 // (A)->(B)->C->(B): A failure in (B) wouldn't need to reset C, as C was flagged
 // read only.
 func (self *EVM) RevertToSnapshot(snapshot int) {
-	self.currentState().RevertToSnapshot(snapshot)
+	self.StateDB.RevertToSnapshot(snapshot)
 }

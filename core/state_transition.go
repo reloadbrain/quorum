@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/private"
 )
@@ -126,8 +125,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 		state:      evm.StateDB,
 	}
 
-	// XXX(joel)
-	//st.state = evm.PublicState()
+	st.state = evm.PublicState()
 	return st
 }
 
@@ -151,22 +149,6 @@ func (st *StateTransition) from() vm.AccountRef {
 		st.state.CreateAccount(f)
 	}
 	return vm.AccountRef(f)
-}
-
-func (st *StateTransition) to() vm.AccountRef {
-	if st.msg == nil {
-		return vm.AccountRef{}
-	}
-	to := st.msg.To()
-	if to == nil {
-		return vm.AccountRef{} // contract creation
-	}
-
-	reference := vm.AccountRef(*to)
-	if !st.state.Exist(*to) {
-		st.state.CreateAccount(*to)
-	}
-	return reference
 }
 
 func (st *StateTransition) useGas(amount uint64) error {
@@ -232,26 +214,20 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	var data []byte
 	isPrivate := false
 	publicState := st.state
-	println("transitioning", "msg", msg)
 	if msg, ok := msg.(PrivateMessage); ok && msg.IsPrivate() {
-		println("transitioning", "isprivate", true)
 		isPrivate = true
 		data, err = private.P.Receive(st.data)
-		println("transitioning", "data", data, "err", err)
 		// Increment the public account nonce if:
 		// 1. Tx is private and *not* a participant of the group and either call or create
 		// 2. Tx is private we are part of the group and is a call
 		if err != nil || !contractCreation {
-			println("transitioning -- setting nonce")
 			publicState.SetNonce(sender.Address(), publicState.GetNonce(sender.Address())+1)
 		}
 
 		if err != nil {
-			println("Ignoring private tx")
 			return nil, new(big.Int), new(big.Int), nil
 		}
 	} else {
-		println("transitioning", "isprivate", false)
 		data = st.data
 	}
 
@@ -281,10 +257,9 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 		if !isPrivate {
 			publicState.SetNonce(sender.Address(), publicState.GetNonce(sender.Address())+1)
 		}
-		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), data, st.gas, st.value)
+		ret, st.gas, vmerr = evm.Call(sender, *msg.To(), data, st.gas, st.value)
 	}
 	if vmerr != nil {
-		log.Debug("VM returned with error", "err", err)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.

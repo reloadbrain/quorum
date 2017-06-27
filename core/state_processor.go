@@ -137,7 +137,6 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	var privateReceipt *types.Receipt
-	println("ApplyTransaction", "tx.IsPrivate()", tx.IsPrivate())
 	if tx.IsPrivate() {
 		privateReceipt = types.NewReceipt(privateState.IntermediateRoot(true).Bytes(), usedGas)
 		privateReceipt.TxHash = tx.Hash()

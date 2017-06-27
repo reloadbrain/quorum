@@ -87,6 +87,7 @@ func (cg *callHelper) MakeCall(private bool, key *ecdsa.PrivateKey, to common.Ad
 		privateState = publicState
 	}
 
+	// TODO(joel): can we just pass nil instead of bc?
 	bc, _ := NewBlockChain(cg.db, params.TestChainConfig, ethash.NewFaker(), new(event.TypeMux), vm.Config{})
 	context := NewEVMContext(pmsg, &cg.header, bc, &from)
 	vmenv := vm.NewEVM(context, publicState, privateState, params.TestChainConfig, vm.Config{})

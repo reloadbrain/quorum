@@ -19,6 +19,20 @@ var dualStateTestHeader = types.Header{
 	GasLimit:   new(big.Int).SetUint64(4700000),
 }
 
+//[1] PUSH1 0x01 (out size)
+//[3] PUSH1 0x00 (out offset)
+//[5] PUSH1 0x00 (in size)
+//[7] PUSH1 0x00 (in offset)
+//[9] PUSH1 0x00 (value)
+//[30] PUSH20 0x0200000000000000000000000000000000000000 (to)
+//[34] PUSH3 0x0186a0 (gas)
+//[35] CALL
+//[37] PUSH1 0x00
+//[38] MLOAD
+//[40] PUSH1 0x00
+//[41] SSTORE
+//[42] STOP
+
 func TestDualStatePrivateToPublicCall(t *testing.T) {
 	callAddr := common.Address{1}
 

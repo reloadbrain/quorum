@@ -63,6 +63,17 @@ func ExampleMakeCallHelper() {
 	fmt.Println("Public:", helper.PublicState.GetState(pubContractAddr, common.Hash{}).Big())
 }
 
+// 600a600055600060006001a1
+// [1] PUSH1 0x0a (store value)
+// [3] PUSH1 0x00 (store addr)
+// [4] SSTORE
+// [6] PUSH1 0x00
+// [8] PUSH1 0x00
+// [10] PUSH1 0x01
+// [11] LOG1
+//
+// Store then log
+
 func TestPrivateTransaction(t *testing.T) {
 	var (
 		key, _       = crypto.GenerateKey()
@@ -78,6 +89,10 @@ func TestPrivateTransaction(t *testing.T) {
 	publicState.SetCode(pubContractAddr, common.Hex2Bytes("6014600055"))
 	publicState.SetState(pubContractAddr, common.Hash{}, common.Hash{19})
 
+	if publicState.Exist(prvContractAddr) {
+		t.Error("didn't expect private contract address to exist on public state")
+	}
+
 	// Private transaction 1
 	err := helper.MakeCall(true, key, prvContractAddr, nil)
 	if err != nil {
@@ -89,6 +104,15 @@ func TestPrivateTransaction(t *testing.T) {
 	}
 	if len(privateState.Logs()) != 1 {
 		t.Error("expected private state to have 1 log, got", len(privateState.Logs()))
+	}
+	if len(publicState.Logs()) != 0 {
+		t.Error("expected public state to have 0 logs, got", len(publicState.Logs()))
+	}
+	if publicState.Exist(prvContractAddr) {
+		t.Error("didn't expect private contract address to exist on public state")
+	}
+	if !privateState.Exist(prvContractAddr) {
+		t.Error("expected private contract address to exist on private state")
 	}
 
 	// Public transaction 1
